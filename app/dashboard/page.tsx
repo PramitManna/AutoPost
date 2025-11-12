@@ -54,7 +54,7 @@ export default function DashboardPage() {
     }
   };
 
-  const postMultipleToFacebook = async () => {
+    const postMultipleToFacebook = async () => {
     if (!pageId || !accessToken) {
       setResult("❌ Missing connection data");
       return;
@@ -71,7 +71,7 @@ export default function DashboardPage() {
           imageUrls: [
             "https://cdn.pixabay.com/photo/2025/11/05/20/57/monastery-9939590_1280.jpg",
             "https://cdn.pixabay.com/photo/2024/05/26/10/15/bird-8788491_1280.jpg",
-            "https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg"
+            "https://cdn.pixabay.com/photo/2024/11/05/08/38/cat-9175333_1280.jpg"
           ],
           caption: "🏡 Multiple images automated post from AutoPost! 📸✨",
           pageId,
@@ -84,6 +84,80 @@ export default function DashboardPage() {
       if (data.success) {
         const link = `https://facebook.com/${data.postId.replace("_", "/posts/")}`;
         setResult(link);
+      } else {
+        setResult("❌ Failed to publish: " + JSON.stringify(data.error));
+      }
+    } catch (err) {
+      setResult("❌ Network error: " + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const postToInstagram = async () => {
+    if (!igBusinessId || !accessToken) {
+      setResult("❌ Missing Instagram connection data");
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/social/publish-instagram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrl: "https://cdn.pixabay.com/photo/2025/11/05/20/57/monastery-9939590_1280.jpg",
+          caption: "📸 Automated Instagram post from AutoPost! 🚀 #automation #instagram",
+          igBusinessId,
+          accessToken,
+        }),
+      });
+
+      const data = await res.json();
+      
+      if (data.success) {
+        setResult(`✅ Posted to Instagram! Post ID: ${data.postId}`);
+      } else {
+        setResult("❌ Failed to publish: " + JSON.stringify(data.error));
+      }
+    } catch (err) {
+      setResult("❌ Network error: " + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const postMultipleToInstagram = async () => {
+    if (!igBusinessId || !accessToken) {
+      setResult("❌ Missing Instagram connection data");
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/social/publish-instagram-multiple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrls: [
+            "https://cdn.pixabay.com/photo/2025/11/05/20/57/monastery-9939590_1280.jpg",
+            "https://cdn.pixabay.com/photo/2024/05/26/10/15/bird-8788491_1280.jpg",
+            "https://cdn.pixabay.com/photo/2024/11/05/08/38/cat-9175333_1280.jpg"
+          ],
+          caption: "📸 Multiple images carousel from AutoPost! 🎨✨ #automation #instagram #carousel",
+          igBusinessId,
+          accessToken,
+        }),
+      });
+
+      const data = await res.json();
+      
+      if (data.success) {
+        setResult(`✅ Posted ${data.mediaCount} images to Instagram! Post ID: ${data.postId}`);
       } else {
         setResult("❌ Failed to publish: " + JSON.stringify(data.error));
       }
@@ -108,7 +182,8 @@ export default function DashboardPage() {
           {igBusinessId && <p className="text-sm text-gray-600">Instagram Business ID: {igBusinessId}</p>}
         </div>
 
-        <div className="flex flex-col space-y-3">
+        <div className="flex flex-col space-y-4">
+          {/* Post Type Selector */}
           <div className="flex gap-2">
             <button
               onClick={() => setPostType('single')}
@@ -132,23 +207,55 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {postType === 'single' ? (
-            <button
-              onClick={postToFacebook}
-              disabled={loading || !pageId || !accessToken}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {loading ? "Posting..." : "Post Single Image"}
-            </button>
-          ) : (
-            <button
-              onClick={postMultipleToFacebook}
-              disabled={loading || !pageId || !accessToken}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-            >
-              {loading ? "Posting..." : "Post Multiple Images"}
-            </button>
-          )}
+          {/* Facebook Posting */}
+          <div className="border rounded-lg p-4 bg-blue-50">
+            <h4 className="font-medium text-blue-900 mb-2">📘 Facebook</h4>
+            {postType === 'single' ? (
+              <button
+                onClick={postToFacebook}
+                disabled={loading || !pageId || !accessToken}
+                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {loading ? "Posting..." : "Post Single Image to Facebook"}
+              </button>
+            ) : (
+              <button
+                onClick={postMultipleToFacebook}
+                disabled={loading || !pageId || !accessToken}
+                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {loading ? "Posting..." : "Post Multiple Images to Facebook"}
+              </button>
+            )}
+          </div>
+
+          {/* Instagram Posting */}
+          <div className="border rounded-lg p-4 bg-pink-50">
+            <h4 className="font-medium text-pink-900 mb-2">📸 Instagram</h4>
+            {igBusinessId ? (
+              postType === 'single' ? (
+                <button
+                  onClick={postToInstagram}
+                  disabled={loading || !igBusinessId || !accessToken}
+                  className="w-full px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-gray-400"
+                >
+                  {loading ? "Posting..." : "Post Single Image to Instagram"}
+                </button>
+              ) : (
+                <button
+                  onClick={postMultipleToInstagram}
+                  disabled={loading || !igBusinessId || !accessToken}
+                  className="w-full px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-gray-400"
+                >
+                  {loading ? "Posting..." : "Post Carousel to Instagram"}
+                </button>
+              )
+            ) : (
+              <div className="text-sm text-gray-500 p-3 bg-gray-100 rounded">
+                ⚠️ Instagram not connected. Please connect your Instagram Business account to your Facebook page.
+              </div>
+            )}
+          </div>
         </div>
 
         {result && (
