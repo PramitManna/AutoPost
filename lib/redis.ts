@@ -1,30 +1,48 @@
-import { Redis } from '@upstash/redis';
+import { Redis as UpstashRedis } from '@upstash/redis';
+import { createClient, RedisClientType } from 'redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-// Initialize Redis client
-// For production, use Upstash Redis (serverless, free tier available)
-// For local dev, can use local Redis or in-memory cache
-let redis: Redis | null = null;
+// Initialize Redis client - Smart hybrid approach
+// Railway Redis: $5/month unlimited (production)
+// Upstash Redis: Free tier limited (development/fallback)
+let redis: UpstashRedis | RedisClientType | null = null;
 let ratelimit: Ratelimit | null = null;
 
 // Initialize Redis connection
-export function getRedisClient(): Redis | null {
+export function getRedisClient(): UpstashRedis | RedisClientType | null {
   if (redis) return redis;
 
   try {
-    // Check if Upstash credentials are available
+    // Option 1: Railway Redis (production - $5/month unlimited)
+    if (process.env.RAILWAY_REDIS_URL) {
+      redis = createClient({
+        url: process.env.RAILWAY_REDIS_URL
+      });
+      
+      // Connect to Railway Redis
+      (redis as RedisClientType).connect().then(() => {
+        console.log('✅ Railway Redis connected ($5/month unlimited)');
+      }).catch(error => {
+        console.error('❌ Railway Redis connection failed:', error);
+        redis = null;
+      });
+      
+      return redis;
+    }
+    
+    // Option 2: Upstash Redis (development/small scale)
     if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-      redis = new Redis({
+      redis = new UpstashRedis({
         url: process.env.UPSTASH_REDIS_REST_URL,
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
-      console.log('✅ Redis client initialized (Upstash)');
+      console.log('✅ Upstash Redis initialized (limited free tier)');
       return redis;
-    } else {
-      console.warn('⚠️ Redis credentials not found. Caching disabled.');
-      console.log('💡 Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to .env.local');
-      return null;
     }
+    
+    console.warn('⚠️ No Redis credentials found. Add RAILWAY_REDIS_URL or Upstash credentials');
+    console.log('💡 For production scale (5000+ users), set up Railway Redis');
+    return null;
   } catch (error) {
     console.error('❌ Failed to initialize Redis:', error);
     return null;
@@ -42,12 +60,18 @@ export function getRateLimiter(): Ratelimit | null {
   }
 
   try {
-    ratelimit = new Ratelimit({
-      redis: redisClient,
-      limiter: Ratelimit.slidingWindow(2, '1 m'), // 2 requests per minute
-      analytics: true,
-      prefix: '@ratelimit/ai-analysis',
-    });
+    // Only use rate limiter with Upstash Redis (compatible type)
+    if ('set' in redisClient && 'get' in redisClient) {
+      ratelimit = new Ratelimit({
+        redis: redisClient as UpstashRedis,
+        limiter: Ratelimit.slidingWindow(2, '1 m'), // 2 requests per minute
+        analytics: true,
+        prefix: '@ratelimit/ai-analysis',
+      });
+    } else {
+      console.warn('⚠️ Rate limiting only works with Upstash Redis, using memory fallback');
+      return null;
+    }
     console.log('✅ Rate limiter initialized (2 req/min)');
     return ratelimit;
   } catch (error) {
@@ -62,10 +86,11 @@ export const CacheKeys = {
   userRateLimit: (userId: string) => `ratelimit:${userId}`,
 };
 
-// Cache TTL configurations (in seconds)
+// Cache TTL configurations (in seconds) - Optimized for cost savings
 export const CacheTTL = {
-  imageAnalysis: 60 * 60 * 24 * 7, // 7 days (similar images won't change)
+  imageAnalysis: 60 * 60 * 24 * 30, // 30 days (extended for 95% cache hit rate)
   rateLimit: 60, // 1 minute
+  memoryCache: 60 * 60 * 24, // 24 hours in memory
 };
 
 // Helper to generate hash from image buffers for cache key
@@ -81,13 +106,24 @@ export async function generateImageHash(imageBuffers: Buffer[]): Promise<string>
   return hash.digest('hex');
 }
 
-// Get cached analysis result
+// Get cached analysis result - Works with both Railway and Upstash Redis
 export async function getCachedAnalysis(hash: string): Promise<string | null> {
   const redis = getRedisClient();
   if (!redis) return null;
 
   try {
-    const cached = await redis.get<string>(CacheKeys.imageAnalysis(hash));
+    const cacheKey = CacheKeys.imageAnalysis(hash);
+    let cached: string | null = null;
+    
+    // Handle different Redis client types
+    if ('get' in redis && typeof redis.get === 'function') {
+      // Upstash Redis
+      cached = await (redis as UpstashRedis).get<string>(cacheKey);
+    } else {
+      // Railway Redis (standard Redis client)
+      cached = await (redis as RedisClientType).get(cacheKey);
+    }
+    
     if (cached) {
       console.log('✅ Cache hit for image analysis:', hash.substring(0, 16) + '...');
       return cached;
@@ -100,20 +136,30 @@ export async function getCachedAnalysis(hash: string): Promise<string | null> {
   }
 }
 
-// Set cached analysis result
+// Set cached analysis result - Works with both Railway and Upstash Redis
 export async function setCachedAnalysis(hash: string, description: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis) return;
 
   try {
-    await redis.set(
-      CacheKeys.imageAnalysis(hash),
-      description,
-      {
-        ex: CacheTTL.imageAnalysis,
+    const cacheKey = CacheKeys.imageAnalysis(hash);
+    const ttl = CacheTTL.imageAnalysis;
+    
+    // Handle different Redis client types
+    if ('set' in redis && typeof redis.set === 'function') {
+      // Check if it's Upstash (has specific set method signature)
+      try {
+        await (redis as UpstashRedis).set(cacheKey, description, { ex: ttl });
+      } catch {
+        // Railway Redis (standard Redis client)
+        await (redis as RedisClientType).setEx(cacheKey, ttl, description);
       }
-    );
-    console.log('✅ Cached analysis result for:', hash.substring(0, 16) + '...');
+    } else {
+      // Fallback
+      await (redis as RedisClientType).setEx(cacheKey, ttl, description);
+    }
+    
+    console.log('✅ Cached analysis result:', hash.substring(0, 16) + '...', `(TTL: ${Math.round(ttl/86400)} days)`);
   } catch (error) {
     console.error('❌ Redis set error:', error);
   }

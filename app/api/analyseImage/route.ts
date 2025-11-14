@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import sharp from 'sharp';
-import {
-  checkRateLimit,
-  generateImageHash,
-  getCachedAnalysis,
-  setCachedAnalysis,
-  getMemoryCachedAnalysis,
-  setMemoryCachedAnalysis,
-} from '@/lib/redis';
+import { checkRateLimit } from '@/lib/redis';
+import { 
+  getCostOptimizedAnalysis,
+  getOptimizationStats 
+} from '@/lib/cost-optimizer';
 
 const IMAGE_PROCESSING_CONFIG = {
   size: 512, 
@@ -26,33 +23,13 @@ function getModelName(): string {
   return process.env.GEMINI_MODEL || GEMINI_MODELS[0];
 }
 
-export async function analyzeMultipleImages(
-  imageBuffers: Buffer[],
-  useCache = true
-): Promise<string> {
+// Core AI analysis function - separated for cost optimization
+async function performAIAnalysis(imageBuffers: Buffer[]): Promise<string> {
     try {
-        console.log('Starting analysis of multiple images...');
+        console.log('🤖 Starting AI analysis of multiple images...');
         
         if (!process.env.GEMINI_API_KEY) {
             throw new Error('GEMINI_API_KEY environment variable is not set');
-        }
-
-        let cacheHash: string | null = null;
-        if (useCache) {
-          cacheHash = await generateImageHash(imageBuffers);
-          console.log('Cache key:', cacheHash.substring(0, 16) + '...');
-
-          const cachedResult = await getCachedAnalysis(cacheHash);
-          if (cachedResult) {
-            console.log('Returning cached result (Redis)');
-            return cachedResult;
-          }
-
-          const memoryCached = getMemoryCachedAnalysis(cacheHash);
-          if (memoryCached) {
-            console.log('Returning cached result (Memory)');
-            return memoryCached;
-          }
         }
         
         const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -166,27 +143,29 @@ ${descriptions.map((desc, index) => `Description ${index + 1}: ${desc}`).join('\
             const finalResponse = await finalResult.response;
             const finalDescription = finalResponse.text();
             console.log('Final synthesized description:', finalDescription);
-            
-            if (useCache && cacheHash) {
-              await setCachedAnalysis(cacheHash, finalDescription);
-              setMemoryCachedAnalysis(cacheHash, finalDescription);
-            }
-            
             return finalDescription;
         } else {
-            const singleDescription = descriptions[0];
-            
-            if (useCache && cacheHash) {
-              await setCachedAnalysis(cacheHash, singleDescription);
-              setMemoryCachedAnalysis(cacheHash, singleDescription);
-            }
-            
-            return singleDescription;
+            return descriptions[0];
         }
     } catch (error) {
-        console.error('Error in analyzeMultipleImages:', error);
+        console.error('Error in performAIAnalysis:', error);
         throw error;
     }
+}
+
+// Cost-optimized analysis function - Uses smart caching
+export async function analyzeMultipleImages(
+  imageBuffers: Buffer[],
+  useCache = true
+): Promise<string> {
+    console.log('Starting cost-optimized image analysis...');
+    
+    if (!useCache) {
+        return await performAIAnalysis(imageBuffers);
+    }
+    
+    // Use cost-optimized version with smart caching
+    return await getCostOptimizedAnalysis(imageBuffers, performAIAnalysis);
 }
 
 // Export for potential reuse in other routes
@@ -311,6 +290,9 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Image analysis completed in ${analysisTime}ms (total: ${totalTime}ms)`);
         console.log('📝 Generated description:', description.substring(0, 100) + '...');
         
+        // Get cost optimization stats
+        const optimizationStats = getOptimizationStats();
+        
         return NextResponse.json({
             success: true,
             description,
@@ -320,12 +302,15 @@ export async function POST(request: NextRequest) {
               analysisTime: `${analysisTime}ms`,
               totalTime: `${totalTime}ms`,
               imageSize: `${(totalSize / 1024).toFixed(2)}KB`,
+              cacheHitRate: `${optimizationStats.hitRate}%`,
+              costOptimization: optimizationStats.isOptimal ? 'Optimal' : 'Can be improved'
             }
         }, {
           headers: {
             'X-RateLimit-Limit': rateLimitResult.limit.toString(),
             'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
             'X-RateLimit-Reset': rateLimitResult.reset.toString(),
+            'X-Cost-Savings': `$${optimizationStats.estimatedCostSaved.toFixed(2)}`,
           }
         });
 
