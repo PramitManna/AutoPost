@@ -1,18 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
+import { generateUserId, getValidToken } from "@/lib/token-manager";
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrl, caption, igBusinessId, accessToken } = await req.json();
+    const { imageUrl, caption } = await req.json();
 
-    if (!imageUrl || !caption || !igBusinessId || !accessToken) {
+    if (!imageUrl || !caption) {
       return NextResponse.json(
-        { error: "Missing required fields: imageUrl, caption, igBusinessId, accessToken" },
+        { error: "Missing required fields: imageUrl, caption" },
         { status: 400 }
       );
     }
 
+    // Get userId and fetch stored token from database
+    const userId = generateUserId(req);
+    const user = await getValidToken(userId);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "No valid token found. Please connect your Meta account first." },
+        { status: 401 }
+      );
+    }
+
+    if (!user.igBusinessId) {
+      return NextResponse.json(
+        { error: "No Instagram Business account connected. Please connect one from your Facebook page." },
+        { status: 400 }
+      );
+    }
+
+    const { accessToken, igBusinessId } = user;
+
     console.log("📤 Publishing to Instagram...");
+    console.log("User ID:", userId);
     console.log("IG Business ID:", igBusinessId);
     console.log("Caption:", caption);
     console.log("Image URL:", imageUrl);

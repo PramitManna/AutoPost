@@ -24,7 +24,19 @@ function getModelName(): string {
 }
 
 // Core AI analysis function - separated for cost optimization
-async function performAIAnalysis(imageBuffers: Buffer[]): Promise<string> {
+async function performAIAnalysis(
+  imageBuffers: Buffer[],
+  listingInfo?: {
+    propertyType?: string;
+    bedrooms?: string;
+    bathrooms?: string;
+    propertySize?: string;
+    parking?: string;
+    view?: string;
+    city?: string;
+    highlights?: string;
+  }
+): Promise<string> {
     try {
         console.log('🤖 Starting AI analysis of multiple images...');
         
@@ -60,6 +72,25 @@ async function performAIAnalysis(imageBuffers: Buffer[]): Promise<string> {
         console.log(`📸 Processed ${base64Images.length} images for AI analysis`);
 
         const descriptions: string[] = [];
+        
+        // Build prompt with listing context if available
+        let listingContext = '';
+        if (listingInfo && Object.values(listingInfo).some(v => v)) {
+          listingContext = `
+LISTING INFORMATION:
+- Property Type: ${listingInfo.propertyType || 'Not specified'}
+- Bedrooms: ${listingInfo.bedrooms || 'Not specified'}
+- Bathrooms: ${listingInfo.bathrooms || 'Not specified'}
+- Property Size: ${listingInfo.propertySize || 'Not specified'}
+- Parking: ${listingInfo.parking || 'Not specified'}
+- View: ${listingInfo.view || 'Not specified'}
+- Location: ${listingInfo.city || 'Not specified'}
+- Special Features: ${listingInfo.highlights || 'None'}
+
+When describing the images, please incorporate these property details into your descriptions where visible and relevant.
+`;
+        }
+        console.log('+==========================+++++/n'+listingContext);
         const prompt = `
 You are a professional real estate marketing assistant.
 Your task is to analyze the provided property image and generate a refined, visually detailed, and compelling short description of the property.
@@ -69,6 +100,7 @@ Guidelines:
 - Describe only what can be visually inferred from the image.
 - Use polished, brochure-style language that highlights key features, design, and ambiance.
 - Mention specific visible attributes (e.g., natural lighting, materials, furnishings, colors, view, spatial layout).
+- Incorporate the listing information details into your description where they align with visible features.
 - Maintain a sophisticated and professional tone suitable for premium real estate listings.
 - Do NOT include emojis, hashtags, or pricing details.
 - Keep grammar, flow, and word choice natural and elegant.
@@ -101,6 +133,10 @@ Input: [A high-end kitchen with marble countertops, pendant lighting, and built-
 Output: "A sophisticated kitchen featuring polished marble countertops, elegant pendant lighting, and state-of-the-art built-in appliances."
 
 ---
+
+Also mention this listing informations because these are relevant for selling
+mention then at the top at the starting only seperately as header, don't mix this up with the caption
+${listingContext}
 
 Now, analyze the following property image and generate one professional, concise, and visually grounded description that matches the above style and tone.
 `;
@@ -137,6 +173,10 @@ Guidelines:
 
 Here are the individual descriptions to synthesize:
 ${descriptions.map((desc, index) => `Description ${index + 1}: ${desc}`).join('\n\n')}
+
+Also mention this listing informations because these are relevant for selling
+mention then at the top at the starting only seperately as header, don't mix this up with the caption
+${listingContext}
 `;
 
             const finalResult = await model.generateContent(finalPrompt);
@@ -156,16 +196,26 @@ ${descriptions.map((desc, index) => `Description ${index + 1}: ${desc}`).join('\
 // Cost-optimized analysis function - Uses smart caching
 export async function analyzeMultipleImages(
   imageBuffers: Buffer[],
-  useCache = true
+  useCache = true,
+  listingInfo?: {
+    propertyType?: string;
+    bedrooms?: string;
+    bathrooms?: string;
+    propertySize?: string;
+    parking?: string;
+    view?: string;
+    city?: string;
+    highlights?: string;
+  }
 ): Promise<string> {
     console.log('Starting cost-optimized image analysis...');
     
     if (!useCache) {
-        return await performAIAnalysis(imageBuffers);
+        return await performAIAnalysis(imageBuffers, listingInfo);
     }
     
     // Use cost-optimized version with smart caching
-    return await getCostOptimizedAnalysis(imageBuffers, performAIAnalysis);
+    return await getCostOptimizedAnalysis(imageBuffers, (buffers) => performAIAnalysis(buffers, listingInfo));
 }
 
 // Export for potential reuse in other routes
@@ -240,12 +290,29 @@ export async function POST(request: NextRequest) {
 
         const formData = await request.formData();
         const imageBuffers: Buffer[] = [];
+        let listingInfo: {
+          propertyType?: string;
+          bedrooms?: string;
+          bathrooms?: string;
+          propertySize?: string;
+          parking?: string;
+          view?: string;
+          city?: string;
+          highlights?: string;
+        } = {};
         let totalSize = 0;
         const MAX_TOTAL_SIZE = 10 * 1024 * 1024; 
         const MAX_IMAGES = 10;
 
         for (const [key, value] of formData.entries()) {
-            if (key.startsWith('image') && value instanceof File) {
+            if (key === 'listingInfo' && typeof value === 'string') {
+                try {
+                    listingInfo = JSON.parse(value);
+                    console.log('📋 Received listing info:', listingInfo);
+                } catch (e) {
+                    console.warn('Failed to parse listing info:', e);
+                }
+            } else if (key.startsWith('image') && value instanceof File) {
                 if (imageBuffers.length >= MAX_IMAGES) {
                   console.warn(`⚠️ Too many images (max ${MAX_IMAGES})`);
                   return NextResponse.json(
@@ -283,7 +350,7 @@ export async function POST(request: NextRequest) {
         console.log(`📊 Processing ${imageBuffers.length} images (total: ${(totalSize / 1024).toFixed(2)}KB)`);
 
         const analysisStartTime = Date.now();
-        const description = await analyzeMultipleImages(imageBuffers, true);
+        const description = await analyzeMultipleImages(imageBuffers, true, listingInfo);
         const analysisTime = Date.now() - analysisStartTime;
 
         const totalTime = Date.now() - startTime;

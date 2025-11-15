@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
+import { generateUserId, getValidToken } from "@/lib/token-manager";
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrls, caption, pageId, accessToken } = await req.json();
+    const { imageUrls, caption } = await req.json();
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
       return NextResponse.json(
@@ -12,14 +13,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!caption || !pageId || !accessToken) {
+    if (!caption) {
       return NextResponse.json(
-        { error: "Missing required fields: caption, pageId, accessToken" },
+        { error: "Missing required field: caption" },
         { status: 400 }
       );
     }
 
+    // Get userId and fetch stored token from database
+    const userId = generateUserId(req);
+    const user = await getValidToken(userId);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "No valid token found. Please connect your Meta account first." },
+        { status: 401 }
+      );
+    }
+
+    const { accessToken, pageId } = user;
+
     console.log("📤 Publishing multiple images to Facebook...");
+    console.log("User ID:", userId);
     console.log("Page ID:", pageId);
     console.log("Caption:", caption);
     console.log("Number of images:", imageUrls.length);

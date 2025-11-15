@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
+import { generateUserId, storeUserToken } from "@/lib/token-manager";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -118,26 +119,28 @@ export async function GET(req: NextRequest) {
       console.log("⚠️ Instagram account lookup failed (this is optional):", igError);
     }
 
-    // 5️⃣ Store in DB (or print to console for now)
-    console.log("✅ Long-Lived Token:", longToken);
+    // 5️⃣ Store in MongoDB
+    const userId = generateUserId(req);
+    
+    await storeUserToken(userId, {
+      accessToken: longToken,
+      pageId: pageId,
+      pageName: pageData.name,
+      igBusinessId: igBusinessId || undefined,
+      userName: userRes.data.name,
+      email: userRes.data.email,
+    });
+
+    console.log("✅ Token stored in MongoDB for user:", userId);
     console.log("✅ Page ID:", pageId);
+    console.log("✅ Page Name:", pageData.name);
     console.log("✅ IG Business ID:", igBusinessId);
 
-    // You'd normally save this to your DB
-    // await db.user.update({
-    //   where: { id: userId },
-    //   data: { accessToken: longToken, pageId, igBusinessId },
-    // });
-
-    // 6️⃣ Redirect to dashboard with confirmation
+    // 6️⃣ Redirect to dashboard with confirmation (userId for later use)
     const url = new URL("/dashboard", req.url);
     url.searchParams.set("connected", "true");
-    url.searchParams.set("accessToken", longToken);
-    url.searchParams.set("pageId", pageId);
+    url.searchParams.set("userId", userId);
     url.searchParams.set("userName", userRes.data.name);
-    if (igBusinessId) {
-      url.searchParams.set("igBusinessId", igBusinessId);
-    }
     return NextResponse.redirect(url);
   } catch (err) {
     const error = err as { response?: { status: number; data: unknown; headers: unknown }; message: string };

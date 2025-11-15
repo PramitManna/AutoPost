@@ -1,18 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
+import { generateUserId, getValidToken } from "@/lib/token-manager";
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrl, caption, pageId, accessToken } = await req.json();
+    const { imageUrl, caption } = await req.json();
 
-    if (!imageUrl || !caption || !pageId || !accessToken) {
+    if (!imageUrl || !caption) {
       return NextResponse.json(
-        { error: "Missing required fields: imageUrl, caption, pageId, accessToken" },
+        { error: "Missing required fields: imageUrl, caption" },
         { status: 400 }
       );
     }
 
+    // Get userId and fetch stored token from database
+    const userId = generateUserId(req);
+    const user = await getValidToken(userId);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "No valid token found. Please connect your Meta account first." },
+        { status: 401 }
+      );
+    }
+
+    const { accessToken, pageId } = user;
+
     console.log("📤 Publishing to Facebook...");
+    console.log("User ID:", userId);
     console.log("Page ID:", pageId);
     console.log("Caption:", caption);
     console.log("Image URL:", imageUrl);
