@@ -259,13 +259,61 @@ export default function TemplatePage() {
 
       <div className="max-w-4xl mx-auto px-4 py-12 sm:px-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          {/* Custom Form */}
+          {/* Header with Options */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Apply Template
+              Template Options
             </h1>
             <p className="text-gray-600">
-              Customize the luxury property template and apply it to your images
+              Choose to apply a luxury template to enhance your images, or skip directly to caption generation
+            </p>
+          </div>
+
+          {/* Template Choice Buttons */}
+          <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+              What would you like to do?
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Apply Template Option */}
+              <div className="bg-white p-6 rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <div className="text-center">
+                  <FiLayers className="text-4xl text-blue-600 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Apply Template</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Enhance your images with a professional luxury property template including branding and pricing
+                  </p>
+                  <button
+                    onClick={() => document.getElementById('template-section')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <FiLayers /> Customize Template
+                  </button>
+                </div>
+              </div>
+
+              {/* Skip Template Option */}
+              <div className="bg-white p-6 rounded-lg border-2 border-green-200 hover:border-green-400 transition-colors">
+                <div className="text-center">
+                  <FiZap className="text-4xl text-green-600 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Skip Template</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Post your images as-is and proceed directly to caption generation and publishing
+                  </p>
+                  <button
+                    onClick={() => router.push('/dashboard/caption?connected=true')}
+                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <FiZap /> Skip to Caption
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500 mt-4 text-center flex items-center justify-center gap-2">
+              <FiInfo className="text-blue-500" />
+              You can always come back to apply templates later
             </p>
           </div>
 
@@ -275,8 +323,10 @@ export default function TemplatePage() {
             </div>
           )}
 
-          {/* Image Selection & Reordering */}
-          <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
+          {/* Template Customization Section */}
+          <div id="template-section">
+            {/* Image Selection & Reordering */}
+            <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
             <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <FiImage className="text-blue-600" />
               Select Image for Template & Reorder
@@ -484,6 +534,8 @@ export default function TemplatePage() {
               </p>
             </div>
           )}
+
+          </div> {/* End template-section */}
 
           {/* Buttons */}
           <div className="pt-8 border-t flex gap-4">
