@@ -191,14 +191,12 @@ export default function TemplatePage() {
       document.body.removeChild(element);
 
       // Debug: Check blob size
-      console.log('Rendered template blob size:', imageBlob.size, 'bytes');
 
       const cloud = await uploadToCloudinary(
         imageBlob,
         `property-template-0`
       );
 
-      console.log('Template upload result:', cloud);
 
       if (!cloud.url) {
         throw new Error('Failed to get URL for templated image');
@@ -221,7 +219,6 @@ export default function TemplatePage() {
         }
       });
 
-      console.log('Final image order:', reorderedUrls);
 
       // Preserve original images for AI analysis
       updateWorkflowSession({

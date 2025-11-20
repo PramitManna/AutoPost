@@ -27,7 +27,7 @@ async function destroy(publicId: string) {
       { status: ok ? 200 : 400 }
     );
   } catch (error) {
-    console.error("❌ Cloudinary destroy error:", error);
+    console.error("Cloudinary destroy error:", error);
     return NextResponse.json(
       { error: "Failed to delete image from Cloudinary", publicId },
       { status: 500 }
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     return destroy(publicId);
   } catch (err) {
-    console.error("❌ Delete endpoint error:", err);
+    console.error("Delete endpoint error:", err);
     return NextResponse.json(
       { error: "Invalid request payload" },
       { status: 400 }

@@ -51,7 +51,6 @@ export async function storeUserToken(
     }
   );
 
-  console.log(`✅ Token stored for user: ${userId}`);
   return user;
 }
 
@@ -65,19 +64,16 @@ export async function getUserToken(userId: string): Promise<IUser | null> {
   const user = await User.findOne({ userId });
 
   if (!user) {
-    console.log(`⚠️ No user found with ID: ${userId}`);
     return null;
   }
 
   // Check if token is expired
   const now = new Date();
   if (user.tokenExpiry < now) {
-    console.log(`⚠️ Token expired for user: ${userId}`);
     // Optionally refresh token here or return null
     return null;
   }
 
-  console.log(`✅ Valid token found for user: ${userId}`);
   return user;
 }
 
@@ -90,7 +86,6 @@ export async function refreshUserToken(userId: string): Promise<IUser | null> {
 
   const user = await User.findOne({ userId });
   if (!user) {
-    console.log(`⚠️ No user found for token refresh: ${userId}`);
     return null;
   }
 
@@ -117,7 +112,6 @@ export async function refreshUserToken(userId: string): Promise<IUser | null> {
     user.tokenExpiry = tokenExpiry;
     await user.save();
 
-    console.log(`✅ Token refreshed for user: ${userId}`);
     return user;
   } catch (error) {
     console.error(`❌ Token refresh failed for user: ${userId}`, error);
@@ -141,7 +135,6 @@ export async function getValidToken(userId: string): Promise<IUser | null> {
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
   if (user.tokenExpiry < sevenDaysFromNow) {
-    console.log(`🔄 Token expiring soon, refreshing for user: ${userId}`);
     const refreshedUser = await refreshUserToken(userId);
     if (refreshedUser) {
       user = refreshedUser;
@@ -158,6 +151,5 @@ export async function deleteUserToken(userId: string): Promise<boolean> {
   await connectToDatabase();
 
   const result = await User.deleteOne({ userId });
-  console.log(`✅ Token deleted for user: ${userId}`);
   return result.deletedCount > 0;
 }

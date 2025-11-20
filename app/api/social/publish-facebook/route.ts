@@ -26,11 +26,6 @@ export async function POST(req: NextRequest) {
 
     const { accessToken, pageId } = user;
 
-    console.log("📤 Publishing to Facebook...");
-    console.log("User ID:", userId);
-    console.log("Page ID:", pageId);
-    console.log("Caption:", caption);
-    console.log("Image URL:", imageUrl);
 
     // Step 1: Get Page Access Token (the user token might not have page posting permissions)
     const pageTokenRes = await axios.get(
@@ -38,7 +33,6 @@ export async function POST(req: NextRequest) {
     );
 
     const pageAccessToken = pageTokenRes.data.access_token;
-    console.log("✅ Got page access token");
 
     // Step 2: Upload photo to Facebook using Page Access Token
     const uploadRes = await axios.post(
@@ -56,7 +50,6 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log("✅ Facebook upload response:", uploadRes.data);
 
     // Construct the post URL
     const postUrl = `https://www.facebook.com/${uploadRes.data.post_id}`;
@@ -70,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     const err = error as { response?: { status: number; data: unknown }; message: string };
-    console.error("❌ Facebook publishing error:", err);
+    console.error(" Facebook publishing error:", err);
 
     if (err.response) {
       console.error("Error response:", err.response.data);

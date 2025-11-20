@@ -21,7 +21,6 @@ export function getRedisClient(): UpstashRedis | RedisClientType | null {
       
       // Connect to Railway Redis
       (redis as RedisClientType).connect().then(() => {
-        console.log('✅ Railway Redis connected ($5/month unlimited)');
       }).catch(error => {
         console.error('❌ Railway Redis connection failed:', error);
         redis = null;
@@ -36,12 +35,10 @@ export function getRedisClient(): UpstashRedis | RedisClientType | null {
         url: process.env.UPSTASH_REDIS_REST_URL,
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
-      console.log('✅ Upstash Redis initialized (limited free tier)');
       return redis;
     }
     
     console.warn('⚠️ No Redis credentials found. Add RAILWAY_REDIS_URL or Upstash credentials');
-    console.log('💡 For production scale (5000+ users), set up Railway Redis');
     return null;
   } catch (error) {
     console.error('❌ Failed to initialize Redis:', error);
@@ -72,7 +69,6 @@ export function getRateLimiter(): Ratelimit | null {
       console.warn('⚠️ Rate limiting only works with Upstash Redis, using memory fallback');
       return null;
     }
-    console.log('✅ Rate limiter initialized (2 req/min)');
     return ratelimit;
   } catch (error) {
     console.error('❌ Failed to initialize rate limiter:', error);
@@ -125,10 +121,8 @@ export async function getCachedAnalysis(hash: string): Promise<string | null> {
     }
     
     if (cached) {
-      console.log('✅ Cache hit for image analysis:', hash.substring(0, 16) + '...');
       return cached;
     }
-    console.log('❌ Cache miss for image analysis');
     return null;
   } catch (error) {
     console.error('❌ Redis get error:', error);
@@ -159,7 +153,6 @@ export async function setCachedAnalysis(hash: string, description: string): Prom
       await (redis as RedisClientType).setEx(cacheKey, ttl, description);
     }
     
-    console.log('✅ Cached analysis result:', hash.substring(0, 16) + '...', `(TTL: ${Math.round(ttl/86400)} days)`);
   } catch (error) {
     console.error('❌ Redis set error:', error);
   }
@@ -233,14 +226,11 @@ export async function clearCache(): Promise<void> {
   const redis = getRedisClient();
   if (!redis) {
     memoryCache.clear();
-    console.log('✅ Memory cache cleared');
     return;
   }
 
   try {
     // Note: Upstash Redis doesn't support SCAN, so we'll just log
-    console.log('⚠️ Cache clearing not implemented for Upstash Redis');
-    console.log('💡 Cache entries will expire based on TTL');
   } catch (error) {
     console.error('❌ Cache clear error:', error);
   }

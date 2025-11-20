@@ -42,7 +42,6 @@ export async function connectToDatabase() {
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      console.log('✅ MongoDB connected successfully');
       return mongoose;
     });
   }
@@ -63,6 +62,5 @@ export async function disconnectFromDatabase() {
     await cached.conn.disconnect();
     cached.conn = null;
     cached.promise = null;
-    console.log('✅ MongoDB disconnected');
   }
 }

@@ -21,22 +21,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(
-      "📤 Processing image:",
-      file.name,
-      `(${(file.size / 1024 / 1024).toFixed(2)}MB)`
-    );
+
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    console.log("🔄 Processing with Sharp...");
-    
+
     // Check if it's a PNG template (preserve format)
     const isPngTemplate = file.name.includes('property-template') && file.name.endsWith('.png');
-    
+
     let processedBuffer;
     let base64Image;
-    
+
     if (isPngTemplate) {
       // For PNG templates, preserve PNG format and don't resize
       processedBuffer = await sharp(buffer)
@@ -45,9 +40,8 @@ export async function POST(request: NextRequest) {
           compressionLevel: 6,
         })
         .toBuffer();
-      
+
       base64Image = `data:image/png;base64,${processedBuffer.toString("base64")}`;
-      console.log("🎨 Processed as PNG template");
     } else {
       // For regular photos, convert to JPEG
       processedBuffer = await sharp(buffer)
@@ -60,9 +54,8 @@ export async function POST(request: NextRequest) {
           progressive: true,
         })
         .toBuffer();
-      
+
       base64Image = `data:image/jpeg;base64,${processedBuffer.toString("base64")}`;
-      console.log("📸 Processed as JPEG photo");
     }
 
     // Generate unique cloudinary public_id
@@ -70,7 +63,7 @@ export async function POST(request: NextRequest) {
     const randomString = Math.random().toString(36).substring(2, 10);
     const publicId = `uploads/${timestamp}_${randomString}`;
 
-    console.log("☁️ Uploading to Cloudinary:", publicId);
+
 
     // Upload to Cloudinary (no local saving)
     const uploadResponse = await cloudinary.uploader.upload(base64Image, {
@@ -80,7 +73,7 @@ export async function POST(request: NextRequest) {
       resource_type: "image",
     });
 
-    console.log("✅ Uploaded to Cloudinary:", uploadResponse.secure_url);
+
 
     return NextResponse.json({
       success: true,
@@ -94,7 +87,7 @@ export async function POST(request: NextRequest) {
       provider: "cloudinary",
     });
   } catch (error) {
-    console.error("❌ Upload error:", error);
+    console.error("Upload error:", error);
     return NextResponse.json(
       { error: "Failed to process or upload image" },
       { status: 500 }

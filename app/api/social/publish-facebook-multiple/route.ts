@@ -33,11 +33,6 @@ export async function POST(req: NextRequest) {
 
     const { accessToken, pageId } = user;
 
-    console.log("📤 Publishing multiple images to Facebook...");
-    console.log("User ID:", userId);
-    console.log("Page ID:", pageId);
-    console.log("Caption:", caption);
-    console.log("Number of images:", imageUrls.length);
 
     // Step 1: Get Page Access Token
     const pageTokenRes = await axios.get(
@@ -45,14 +40,12 @@ export async function POST(req: NextRequest) {
     );
 
     const pageAccessToken = pageTokenRes.data.access_token;
-    console.log("✅ Got page access token");
 
     // Step 2: Upload all images first (unpublished)
     const mediaIds = [];
 
     for (let i = 0; i < imageUrls.length; i++) {
       const imageUrl = imageUrls[i];
-      console.log(`📷 Uploading image ${i + 1}/${imageUrls.length}:`, imageUrl);
 
       const uploadRes = await axios.post(
         `https://graph.facebook.com/v21.0/${pageId}/photos`,
@@ -72,7 +65,6 @@ export async function POST(req: NextRequest) {
         media_fbid: uploadRes.data.id
       });
 
-      console.log(`✅ Image ${i + 1} uploaded with ID:`, uploadRes.data.id);
     }
 
     // Step 3: Create a multi-photo post with all uploaded images
@@ -90,7 +82,6 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log("✅ Multi-photo post created:", multiPostRes.data);
 
     // Construct the post URL
     const postUrl = `https://www.facebook.com/${multiPostRes.data.id}`;
@@ -105,7 +96,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     const err = error as { response?: { status: number; data: unknown }; message: string };
-    console.error("❌ Facebook multiple images publishing error:", err);
+    console.error(" Facebook multiple images publishing error:", err);
 
     if (err.response) {
       console.error("Error response:", err.response.data);

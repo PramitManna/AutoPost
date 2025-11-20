@@ -1,7 +1,6 @@
 'use client';
 
 export default function ConnectPage() {
-    console.log("App ID →", process.env.NEXT_PUBLIC_META_APP_ID);
     const handleConnect = () => {
         const params = new URLSearchParams({
             client_id: process.env.NEXT_PUBLIC_META_APP_ID!,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FiChevronLeft, FiLoader, FiImage, FiHeart, FiMessageCircle, FiSend, FiBookmark, FiMoreHorizontal, FiCheckCircle } from 'react-icons/fi';
+import { FiChevronLeft, FiLoader, FiImage, FiHeart, FiMessageCircle, FiSend, FiBookmark, FiMoreHorizontal, FiCheckCircle, FiTrash, FiX } from 'react-icons/fi';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import StepIndicator from '@/components/StepIndicator';
@@ -23,6 +23,12 @@ function PublishPageContent() {
   const [success, setSuccess] = useState<string | null>(null);
   const [postUrl, setPostUrl] = useState<string | null>(null);
 
+  // Empty room feature states
+  const [showEmptyRoomModal, setShowEmptyRoomModal] = useState(false);
+  const [selectedImageIndices, setSelectedImageIndices] = useState<number[]>([]);
+  const [emptyingRoom, setEmptyingRoom] = useState(false);
+  const [emptyRoomError, setEmptyRoomError] = useState<string | null>(null);
+
   useEffect(() => {
     if (connected !== 'true') {
       router.push('/dashboard');
@@ -38,11 +44,6 @@ function PublishPageContent() {
 
     const session = getWorkflowSession();
     if (session) {
-      console.log('Workflow session:', {
-        imageUrls: session.imageUrls,
-        originalImageUrls: session.originalImageUrls,
-        imagePublicIds: session.imagePublicIds
-      });
       setWorkflow(session);
     }
   }, [router, connected]);
@@ -136,6 +137,85 @@ function PublishPageContent() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post to Instagram');
       setLoading(false);
+    }
+  };
+
+  const handleEmptyRoomClick = () => {
+    setShowEmptyRoomModal(true);
+    setSelectedImageIndices([]);
+    setEmptyRoomError(null);
+  };
+
+  const toggleImageSelection = (index: number) => {
+    setSelectedImageIndices(prev =>
+      prev.includes(index)
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (!workflow) return;
+    if (selectedImageIndices.length === workflow.imageUrls.length) {
+      setSelectedImageIndices([]);
+    } else {
+      setSelectedImageIndices(workflow.imageUrls.map((_, idx) => idx));
+    }
+  };
+
+  const processEmptyRoom = async () => {
+    if (!workflow || selectedImageIndices.length === 0) {
+      setEmptyRoomError('Please select at least one image to process');
+      return;
+    }
+
+    setEmptyingRoom(true);
+    setEmptyRoomError(null);
+
+    try {
+      const response = await fetch('/api/empty-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrls: workflow.imageUrls,
+          selectedIndices: selectedImageIndices,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to process images');
+      }
+
+      // Update workflow with new image URLs
+      const updatedImageUrls = [...workflow.imageUrls];
+      const updatedImagePublicIds = [...workflow.imagePublicIds];
+
+      for (const processedImage of data.processedImages) {
+        updatedImageUrls[processedImage.index] = processedImage.url;
+        updatedImagePublicIds[processedImage.index] = processedImage.publicId;
+      }
+
+      const updatedWorkflow = {
+        ...workflow,
+        imageUrls: updatedImageUrls,
+        imagePublicIds: updatedImagePublicIds,
+      };
+
+      setWorkflow(updatedWorkflow);
+
+      // Update session storage
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('workflowData', JSON.stringify(updatedWorkflow));
+      }
+
+      setShowEmptyRoomModal(false);
+      setSelectedImageIndices([]);
+      setEmptyingRoom(false);
+    } catch (err) {
+      setEmptyRoomError(err instanceof Error ? err.message : 'Failed to process images');
+      setEmptyingRoom(false);
     }
   };
 
@@ -408,20 +488,156 @@ function PublishPageContent() {
               )}
 
               {!success && (
-                <Button
-                  onClick={() => router.push('/dashboard/caption')}
-                  disabled={loading}
-                  variant="ghost"
-                  className="w-full"
-                  leftIcon={<FiChevronLeft />}
-                >
-                  Back to Caption
-                </Button>
+                <>
+                  <Card
+                    className="p-6 cursor-pointer hover:border-purple-500 dark:hover:border-purple-500 transition-colors group"
+                    onClick={handleEmptyRoomClick}
+                  >
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="h-12 w-12 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <FiTrash className="text-2xl" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">Make Room Empty</h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Remove furniture with AI</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="primary"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white border-transparent"
+                      disabled={loading || emptyingRoom}
+                    >
+                      Empty Room
+                    </Button>
+                  </Card>
+
+                  <Button
+                    onClick={() => router.push('/dashboard/caption')}
+                    disabled={loading}
+                    variant="ghost"
+                    className="w-full"
+                    leftIcon={<FiChevronLeft />}
+                  >
+                    Back to Caption
+                  </Button>
+                </>
               )}
             </div>
           </div>
         </motion.div>
       </div>
+
+      {/* Empty Room Modal */}
+      {showEmptyRoomModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
+              <div>
+                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Make Room Empty</h2>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                  Select images to remove furniture and objects using AI
+                </p>
+              </div>
+              <button
+                onClick={() => setShowEmptyRoomModal(false)}
+                disabled={emptyingRoom}
+                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <FiX className="text-2xl text-zinc-500" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              {emptyRoomError && (
+                <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm">
+                  {emptyRoomError}
+                </div>
+              )}
+
+              {/* Select All Checkbox */}
+              <div className="mb-6 flex items-center gap-3 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="select-all"
+                  checked={workflow ? selectedImageIndices.length === workflow.imageUrls.length : false}
+                  onChange={toggleSelectAll}
+                  disabled={emptyingRoom}
+                  className="w-5 h-5 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <label htmlFor="select-all" className="text-sm font-medium text-zinc-900 dark:text-zinc-50 cursor-pointer">
+                  Select All Images ({workflow?.imageUrls.length || 0})
+                </label>
+              </div>
+
+              {/* Image Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {workflow?.imageUrls.map((url, index) => (
+                  <div
+                    key={index}
+                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${selectedImageIndices.includes(index)
+                        ? 'border-purple-500 shadow-lg shadow-purple-500/20'
+                        : 'border-zinc-200 dark:border-zinc-700 hover:border-purple-300 dark:hover:border-purple-700'
+                      }`}
+                    onClick={() => !emptyingRoom && toggleImageSelection(index)}
+                  >
+                    <Image
+                      src={url}
+                      alt={`Image ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                    <div className="absolute top-2 right-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedImageIndices.includes(index)}
+                        onChange={() => toggleImageSelection(index)}
+                        disabled={emptyingRoom}
+                        className="w-5 h-5 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    {selectedImageIndices.includes(index) && (
+                      <div className="absolute inset-0 bg-purple-500/10 pointer-events-none" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between gap-4 p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {selectedImageIndices.length} image{selectedImageIndices.length !== 1 ? 's' : ''} selected
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setShowEmptyRoomModal(false)}
+                  disabled={emptyingRoom}
+                  variant="ghost"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={processEmptyRoom}
+                  disabled={emptyingRoom || selectedImageIndices.length === 0}
+                  variant="primary"
+                  className="bg-purple-600 hover:bg-purple-700 text-white border-transparent"
+                  isLoading={emptyingRoom}
+                >
+                  {emptyingRoom ? 'Processing...' : 'Process Selected'}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </main>
   );
 }
